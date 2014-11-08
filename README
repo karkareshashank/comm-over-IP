@@ -1,0 +1,5 @@
+comm-over-IP
+=============
+
+Kernel modules to provide ability to send and receive the messages
+directly via IP.
