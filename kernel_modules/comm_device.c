@@ -14,14 +14,22 @@
 #include <asm/uaccess.h>
 #include <linux/fs.h>
 #include <linux/device.h>
+#include <net/ip.h>
+#include <net/route.h>
+#include <net/sock.h>
+#include <net/protocol.h>
+#include <linux/inetdevice.h>
+#include <linux/netdevice.h>
+#include <linux/inet.h>
 
 #define DEVICE_NAME	"cse536"
 #define IPPROTO_CSE536	234
 #define MAX_BUF_SIZE	10
+#define MAX_MSG_SIZE	256
 
 /* Structure for buffer linklist */
 struct node {
-	struct list_head link;
+	struct list_head list;
 	char	*data;
 };
 
@@ -34,9 +42,104 @@ struct comm_device {
 }*comm_devp;
 
 
+// destination and local address variables
+__be32 cse536_daddr = 0;
+__be32 cse536_saddr = 0;
+
 static dev_t comm_dev_number;	// Alloted device number //
 struct class *comm_dev_class; 	// Tie with device model //
 
+///////////////////////////////////////////////////////////////////
+//		Protocol Part
+///////////////////////////////////////////////////////////////////
+
+static int cse536_recv(struct sk_buff *skb)
+{
+	struct node *tmp = NULL;
+
+	tmp = kmalloc(sizeof(struct node), GFP_KERNEL);
+	tmp->data = kmalloc(sizeof(char)* MAX_MSG_SIZE, GFP_KERNEL);
+
+	memset(tmp->data, 0, MAX_MSG_SIZE);
+	memcpy(tmp->data, skb->data, skb->len);
+
+	list_add_tail( &(tmp->list), &(comm_devp->bufHead));
+
+	pr_info("%s: Receviced %d bytes: %s \n", DEVICE_NAME, 
+			skb->len, tmp->data);
+
+	return 0;
+}
+
+
+static void cse536_error(struct sk_buff *skb, u32 info)
+{
+	pr_info("%s: Error in packet \n", DEVICE_NAME);
+}
+
+/* Regester protocol with  IP */
+static const struct net_protocol cse536_protocol = {
+	.handler	= cse536_recv,
+	.err_handler	= cse536_error,
+	.no_policy	= 1,
+	.netns_ok	= 1,
+};
+
+
+static int add_my_proto(void)
+{
+	return inet_add_protocol(&cse536_protocol, IPPROTO_CSE536);
+}
+
+static int del_my_proto(void)
+{
+	return inet_del_protocol(&cse536_protocol, IPPROTO_CSE536);
+}
+
+static int cse536_sendmsg(char *data, size_t len)
+{
+	struct sk_buff 	*skb;
+	struct iphdr	*iph;
+	struct rtable	*rt;
+	struct net 	*net	= &init_net;
+	unsigned char 	*skbdata;
+
+	// Create and setup sk_buff
+	skb = alloc_skb(sizeof(struct iphdr) + 4096, GFP_ATOMIC);
+	skb_reserve(skb, sizeof(struct iphdr) + 1500);
+	skbdata = skb_put(skb, len);
+	memcpy(skbdata, data, len);
+
+	//setup and add ip header
+	skb_push(skb, sizeof(struct iphdr));
+	skb_reset_network_header(skb);
+	iph = ip_hdr(skb);
+	iph->version 	= 4;
+	iph->ihl 	= 5;
+	iph->tos	= 0;
+	iph->frag_off	= 0;
+	iph->ttl	= 64;
+	iph->daddr	= cse536_daddr;
+	iph->saddr	= cse536_saddr;
+	iph->protocol	= IPPROTO_CSE536;
+	iph->id		= htons(1);
+	iph->tot_len	= htons(skb->len);
+
+	// get the route
+	rt = ip_route_output(net, cse536_daddr, cse536_saddr, 0, 0);
+	skb_dst_set(skb, &rt->dst);
+
+	// Deallocate the memory for the data received
+	if (data)
+		kfree(data);
+
+	return ip_local_out(skb);
+}
+
+
+///////////////////////////////////////////////////////////////////
+// 	Device part
+///////////////////////////////////////////////////////////////////
 
 /*
  * Open comm device
@@ -46,8 +149,6 @@ int comm_open(struct inode *inode, struct file *file)
 	printk("%s: Device opening\n", DEVICE_NAME);
 	return 0;
 }
-
-
 
 /*
  * Release comm device
@@ -65,7 +166,31 @@ int comm_release(struct inode *inode, struct file *file)
 ssize_t comm_read(struct file *file, char __user *buf , size_t count,
 		loff_t *ppos)
 {
-	return 0;
+	int ret = 0;
+	struct node *entry = NULL;
+	struct list_head *tmp = NULL;
+
+	if (list_empty(&comm_devp->bufHead))
+		return 0;
+	
+	tmp = comm_devp->bufHead.next;
+	entry = list_entry(tmp, struct node, list);
+	list_del(tmp);
+	
+	if(copy_to_user( (void __user*)buf, (const void *)entry->data,
+		strlen(entry->data)) != 0) {
+		pr_info("%s: Error copying data \n",DEVICE_NAME);
+		ret = -1;
+	}
+	else {
+		ret = strlen(entry->data);
+		if(entry->data)
+			kfree(entry->data);
+		if(entry)
+			kfree(entry);
+	}
+
+	return ret;
 }
 
 
@@ -76,7 +201,29 @@ ssize_t comm_read(struct file *file, char __user *buf , size_t count,
 ssize_t comm_write(struct file *file, const char *buf, size_t count,
 		loff_t *ppos)
 {
-	return 0;
+	char *tmp_data = NULL;
+	tmp_data = kmalloc(sizeof(char)* MAX_MSG_SIZE, GFP_KERNEL);
+	if(!tmp_data) {
+		pr_info("%s: Insufficient memory\n", DEVICE_NAME);
+		return -ENOMEM;
+	}
+
+	if (copy_from_user((void *)tmp_data, 
+		(const void __user *)buf, count) != 0) {
+		pr_info("%s: Error copying data from user buf\n", DEVICE_NAME);
+		kfree(tmp_data);
+		return -1;
+	}
+
+	if (tmp_data[0] == '1') {
+		// set the destination address
+		cse536_daddr = in_aton(tmp_data+1);
+	}
+	else {
+		cse536_sendmsg(tmp_data, count);
+	}
+
+	return count;
 }
 
 
@@ -91,7 +238,7 @@ static struct file_operations comm_fops = {
 
 
 
-int __init comm_init(void)
+static int __init comm_init(void)
 {
 	int ret;
 
@@ -115,6 +262,14 @@ int __init comm_init(void)
 	INIT_LIST_HEAD(&comm_devp->bufHead);
 	comm_devp->buf_size = 0;
 
+	// Add new protocol
+	if( add_my_proto() == -1) {
+		pr_info("%s: Error registering protocol \n", DEVICE_NAME);
+		kfree(comm_devp);
+		unregister_chrdev_region((comm_dev_number), 1);
+		return -1;
+	}
+
 	/* Connect the file operations with the cdev */
 	cdev_init(&comm_devp->cdev, &comm_fops);
 	comm_devp->cdev.owner = THIS_MODULE;
@@ -123,24 +278,28 @@ int __init comm_init(void)
 	ret = cdev_add(&comm_devp->cdev, (comm_dev_number), 1);
 	if (ret) {
 		printk("%s: Bad cdev\n", DEVICE_NAME);
+		del_my_proto();
 		kfree(comm_devp);
 		unregister_chrdev_region((comm_dev_number), 1);
 		return ret;
 	}
 
 	/* Send uevents to udev, so it'll create /dev nodes */
-	device_create(comm_dev_class, NULL, MKDEV(MAJOR(comm_dev_number), 0), NULL, "%s",DEVICE_NAME);	
+	device_create(comm_dev_class, NULL, MKDEV(MAJOR(comm_dev_number), 0),
+			NULL, "%s",DEVICE_NAME);	
 
 	pr_info("%s: Device Initialized\n", DEVICE_NAME);
 	return 0;
 }
 
 
-void __exit comm_exit(void)
+static void __exit comm_exit(void)
 {
 	/* Destroy device */
 	device_destroy(comm_dev_class, MKDEV(MAJOR(comm_dev_number), 0));
 	cdev_del(&comm_devp->cdev);
+
+	del_my_proto();
 
 	if(!comm_devp->buf_size)
 		kfree(comm_devp);
