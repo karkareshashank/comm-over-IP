@@ -20,12 +20,15 @@
 
 #include "cse536_protocol.h"
 
+static struct node bufHead;
 
 // destination and local address variables
 __be32 cse536_daddr = 0;
 __be32 cse536_saddr = 0;
 
 
+
+// Receive function for cse536 protocol
 static int cse536_recv(struct sk_buff *skb)
 {
         struct node *tmp = NULL;
@@ -35,20 +38,22 @@ static int cse536_recv(struct sk_buff *skb)
 
         memset(tmp->data, 0, MAX_MSG_SIZE);
         memcpy(tmp->data, skb->data, skb->len);
+	tmp->len = skb->len;
 
-        list_add_tail( &(tmp->list), &(comm_devp->bufHead));
+        list_add_tail( &(tmp->list), &(bufHead.list));
 
-        pr_info("%s: Receviced %d bytes: %s \n", DEVICE_NAME,
+        pr_info("%s: Receviced %d bytes: %s \n", __FILE__,
                         skb->len, tmp->data);
 
         return 0;
 }
 
-
+// Error handling function for cse536 protocol
 static void cse536_error(struct sk_buff *skb, u32 info)
 {
-        pr_info("%s: Error in packet \n", DEVICE_NAME);
+        pr_info("%s: Error in packet \n", __FILE__);
 }
+
 
 /* Regester protocol with  IP */
 static const struct net_protocol cse536_protocol = {
@@ -59,19 +64,16 @@ static const struct net_protocol cse536_protocol = {
 };
 
 
-int add_cse536_proto(void)
+static int add_cse536_proto(void)
 {
-	get_local_address();
         return inet_add_protocol(&cse536_protocol, IPPROTO_CSE536);
 }
-EXPORT_SYMBOL(add_cse536_proto);
 
 
-int del_cse536_proto(void)
+static int del_cse536_proto(void)
 {
         return inet_del_protocol(&cse536_protocol, IPPROTO_CSE536);
 }
-EXPORT_SYMBOL(del_cse536_proto);
 
 
 int cse536_sendmsg(char *data, size_t len)
@@ -118,6 +120,31 @@ void cse536_set_addr(char *addr)
 }
 EXPORT_SYMBOL(cse536_set_addr);
 
+// Get the message from the list
+void cse536_getmsg(char *data, size_t *len)
+{
+	struct node *entry = NULL;
+        struct list_head *tmp = NULL;
+
+        if (list_empty( &(bufHead.list) )) {
+		*len = 0;
+                return;
+	}
+
+        tmp = bufHead.list.next;
+        entry = list_entry(tmp, struct node, list);
+        list_del(tmp);
+
+	memcpy(data, entry->data, entry->len);
+	*len = entry->len;
+       
+	if(entry->data)
+		kfree(entry->data);
+	if(entry)
+		kfree(entry);
+        
+}
+EXPORT_SYMBOL(cse536_getmsg);
 
 
 // Get local ip address 
@@ -131,3 +158,39 @@ static void get_local_address(void)
         } endfor_ifa(ineth0);
 }
 
+
+
+static int __init cse536_init(void)
+{
+	INIT_LIST_HEAD(&bufHead.list);	
+	add_cse536_proto();
+	get_local_address();	
+
+	return 0;
+}
+
+
+
+static void __exit cse536_exit(void)
+{
+	struct node 	 *tmp = NULL;
+	struct list_head *pos = NULL;
+	struct list_head *q   = NULL;
+
+	del_cse536_proto();
+
+	// Free all the elements in the list
+	list_for_each_safe(pos, q, &bufHead.list) {
+		tmp = list_entry(pos, struct node, list);
+		list_del(pos);
+		if(tmp->data)
+			kfree(tmp->data);
+		kfree(tmp);
+	}
+}
+
+
+module_init(cse536_init);
+module_exit(cse536_exit);
+MODULE_LICENSE("GPL");
+MODULE_AUTHOR("shashank Karkare");
