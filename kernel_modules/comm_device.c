@@ -129,10 +129,6 @@ static int cse536_sendmsg(char *data, size_t len)
 	rt = ip_route_output(net, cse536_daddr, cse536_saddr, 0, 0);
 	skb_dst_set(skb, &rt->dst);
 
-	// Deallocate the memory for the data received
-	if (data)
-		kfree(data);
-
 	return ip_local_out(skb);
 }
 
