@@ -59,18 +59,22 @@ static const struct net_protocol cse536_protocol = {
 };
 
 
-static int add_my_proto(void)
+int add_cse536_proto(void)
 {
+	get_local_address();
         return inet_add_protocol(&cse536_protocol, IPPROTO_CSE536);
 }
+EXPORT_SYMBOL(add_cse536_proto);
 
-static int del_my_proto(void)
+
+int del_cse536_proto(void)
 {
         return inet_del_protocol(&cse536_protocol, IPPROTO_CSE536);
 }
+EXPORT_SYMBOL(del_cse536_proto);
 
 
-static int cse536_sendmsg(char *data, size_t len)
+int cse536_sendmsg(char *data, size_t len)
 {
         struct sk_buff  *skb;
         struct iphdr    *iph;
@@ -105,10 +109,19 @@ static int cse536_sendmsg(char *data, size_t len)
 
         return ip_local_out(skb);
 }
+EXPORT_SYMBOL(cse536_sendmsg);
+
+// Set destination address
+void cse536_set_addr(char *addr) 
+{
+	 cse536_daddr = in_aton(addr);
+}
+EXPORT_SYMBOL(cse536_set_addr);
+
 
 
 // Get local ip address 
-static void getLocalAddress(void)
+static void get_local_address(void)
 {
         struct net_device *eth0 = dev_get_by_name(&init_net, "eth0");
         struct in_device *ineth0 = in_dev_get(eth0);

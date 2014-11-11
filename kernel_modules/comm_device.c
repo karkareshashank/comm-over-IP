@@ -37,15 +37,10 @@ struct node {
 
 /* Structure per-device */
 struct comm_device {
-	struct list_head 	bufHead;
-	unsigned int 		buf_size;
-	struct cdev		cdev;
+	char		dev_name[20];
+	struct cdev	cdev;
 }*comm_devp;
 
-
-// destination and local address variables
-extern __be32 cse536_daddr;
-extern __be32 cse536_saddr;
 
 static dev_t comm_dev_number;	// Alloted device number //
 struct class *comm_dev_class; 	// Tie with device model //
@@ -273,19 +268,14 @@ static int __init comm_init(void)
 		return -ENOMEM;
 	}
 
-	// Initialize the buffer list 
-	INIT_LIST_HEAD(&comm_devp->bufHead);
-	comm_devp->buf_size = 0;
 
 	// Add new protocol
-	if( add_my_proto() == -1) {
+	if( add_cse536_proto() == -1) {
 		pr_info("%s: Error registering protocol \n", DEVICE_NAME);
 		kfree(comm_devp);
 		unregister_chrdev_region((comm_dev_number), 1);
 		return -1;
 	}
-
-	getLocalAddress();
 
 	/* Connect the file operations with the cdev */
 	cdev_init(&comm_devp->cdev, &comm_fops);
@@ -295,7 +285,7 @@ static int __init comm_init(void)
 	ret = cdev_add(&comm_devp->cdev, (comm_dev_number), 1);
 	if (ret) {
 		printk("%s: Bad cdev\n", DEVICE_NAME);
-		del_my_proto();
+		del_cse536_proto();
 		kfree(comm_devp);
 		unregister_chrdev_region((comm_dev_number), 1);
 		return ret;
@@ -316,7 +306,7 @@ static void __exit comm_exit(void)
 	device_destroy(comm_dev_class, MKDEV(MAJOR(comm_dev_number), 0));
 	cdev_del(&comm_devp->cdev);
 
-	del_my_proto();
+	del_cse536_proto();
 
 	if(!comm_devp->buf_size)
 		kfree(comm_devp);
