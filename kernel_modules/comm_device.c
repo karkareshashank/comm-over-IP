@@ -202,7 +202,7 @@ ssize_t comm_write(struct file *file, const char *buf, size_t count,
 		loff_t *ppos)
 {
 	char *tmp_data = NULL;
-	tmp_data = kmalloc(sizeof(char)* MAX_MSG_SIZE, GFP_KERNEL);
+	tmp_data = kzalloc(sizeof(char)* MAX_MSG_SIZE, GFP_KERNEL);
 	if(!tmp_data) {
 		pr_info("%s: Insufficient memory\n", DEVICE_NAME);
 		return -ENOMEM;
@@ -214,6 +214,7 @@ ssize_t comm_write(struct file *file, const char *buf, size_t count,
 		kfree(tmp_data);
 		return -1;
 	}
+	tmp_data[strlen(tmp_data)] = '\0';
 
 	if (tmp_data[0] == '1') {
 		// set the destination address
@@ -222,6 +223,10 @@ ssize_t comm_write(struct file *file, const char *buf, size_t count,
 	else {
 		cse536_sendmsg(tmp_data, count);
 	}
+	pr_info("%s: data written = %s : %d \n",DEVICE_NAME, tmp_data, (unsigned int)count);
+
+	if(tmp_data)
+		kfree(tmp_data);
 
 	return count;
 }
