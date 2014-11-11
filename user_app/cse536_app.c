@@ -9,7 +9,8 @@
 #include <sys/types.h>
 
 #define DEVICE_NAME	"/dev/cse536"
-#define TEST_MSG	"Call of Duty: Advanced Warfare"
+#define TEST_MSG	"Assassin's Creed: Unity from Machine 2"
+#define DEST_ADDR	"192.168.136.130"
 #define MAX_MSG_SIZE	256
 #define IPPROTO_CSE536	234
 
@@ -78,7 +79,7 @@ int main(int argc, char **argv)
 	}
 
 	// Set the address
-	if (set_daddr(fd, "127.0.0.1") == -1) {
+	if (set_daddr(fd, DEST_ADDR) == -1) {
 		printf("%s: Error setting the address\n", __FILE__);
 		ret = -1;
 		goto close_file;
@@ -94,7 +95,10 @@ int main(int argc, char **argv)
 	}
 
 
+	sleep(2);
+
 	// Read the data
+	memset(data, 0, MAX_MSG_SIZE);
 	if (recv_msg(fd, data) == -1) {
 		printf("%s: Error receiving message\n",__FILE__);
 		ret = -1;
