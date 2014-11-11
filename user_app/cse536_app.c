@@ -9,6 +9,7 @@
 #include <sys/types.h>
 
 #define DEVICE_NAME	"/dev/cse536"
+#define TEST_MSG	"Call of Duty: Advanced Warfare"
 #define MAX_MSG_SIZE	256
 #define IPPROTO_CSE536	234
 
@@ -84,7 +85,8 @@ int main(int argc, char **argv)
 	}	
 
 	// Send the data
-	strcpy(data, "Call of Duty: Advanced Warfare");
+	strcpy(data, TEST_MSG);
+	printf("%s: Sedning message = %s\n",__FILE__, data);
 	if (send_msg(fd, data) == -1) {
 		printf("%s: Error sending the message\n",__FILE__);
 		ret = -1;
