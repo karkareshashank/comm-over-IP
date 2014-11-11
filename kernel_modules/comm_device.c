@@ -133,6 +133,19 @@ static int cse536_sendmsg(char *data, size_t len)
 }
 
 
+// Get local ip address 
+static void getLocalAddress(void)
+{
+	struct net_device *eth0 = dev_get_by_name(&init_net, "eth0");
+	struct in_device *ineth0 = in_dev_get(eth0);
+
+	for_primary_ifa(ineth0) {
+		cse536_saddr = ifa->ifa_address;
+	} endfor_ifa(ineth0);
+}
+
+
+
 ///////////////////////////////////////////////////////////////////
 // 	Device part
 ///////////////////////////////////////////////////////////////////
@@ -270,6 +283,8 @@ static int __init comm_init(void)
 		unregister_chrdev_region((comm_dev_number), 1);
 		return -1;
 	}
+
+	getLocalAddress();
 
 	/* Connect the file operations with the cdev */
 	cdev_init(&comm_devp->cdev, &comm_fops);
