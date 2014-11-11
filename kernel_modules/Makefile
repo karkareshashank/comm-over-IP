@@ -1,5 +1,6 @@
 obj-m += comm_device.o
 
+comm_device-objs: cse536_protocol.o
 all:
 	make -C /lib/modules/$(shell uname -r)/build M=$(PWD) modules
 

@@ -22,8 +22,9 @@
 #include <linux/netdevice.h>
 #include <linux/inet.h>
 
+#include "cse536_protocol.h"
+
 #define DEVICE_NAME	"cse536"
-#define IPPROTO_CSE536	234
 #define MAX_BUF_SIZE	10
 #define MAX_MSG_SIZE	256
 
@@ -43,8 +44,8 @@ struct comm_device {
 
 
 // destination and local address variables
-__be32 cse536_daddr = 0;
-__be32 cse536_saddr = 0;
+extern __be32 cse536_daddr;
+extern __be32 cse536_saddr;
 
 static dev_t comm_dev_number;	// Alloted device number //
 struct class *comm_dev_class; 	// Tie with device model //
@@ -52,7 +53,7 @@ struct class *comm_dev_class; 	// Tie with device model //
 ///////////////////////////////////////////////////////////////////
 //		Protocol Part
 ///////////////////////////////////////////////////////////////////
-
+/*
 static int cse536_recv(struct sk_buff *skb)
 {
 	struct node *tmp = NULL;
@@ -77,7 +78,7 @@ static void cse536_error(struct sk_buff *skb, u32 info)
 	pr_info("%s: Error in packet \n", DEVICE_NAME);
 }
 
-/* Regester protocol with  IP */
+// Regester protocol with  IP 
 static const struct net_protocol cse536_protocol = {
 	.handler	= cse536_recv,
 	.err_handler	= cse536_error,
@@ -144,7 +145,7 @@ static void getLocalAddress(void)
 	} endfor_ifa(ineth0);
 }
 
-
+*/
 
 ///////////////////////////////////////////////////////////////////
 // 	Device part
