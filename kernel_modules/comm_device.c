@@ -230,7 +230,7 @@ ssize_t comm_write(struct file *file, const char *buf, size_t count,
 		cse536_daddr = in_aton(tmp_data+1);
 	}
 	else {
-		cse536_sendmsg(tmp_data, count);
+		cse536_sendmsg(tmp_data+1, count);
 	}
 	pr_info("%s: data written = %s : %d \n",DEVICE_NAME, tmp_data, (unsigned int)count);
 
