@@ -1,4 +1,4 @@
-#obj-m += comm_device.o
+obj-m += comm_device.o
 obj-m += cse536_protocol.o
 
 all:

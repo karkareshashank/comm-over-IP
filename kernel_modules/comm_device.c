@@ -10,6 +10,7 @@
 #include <linux/slab.h>
 #include <asm/uaccess.h>
 #include <linux/device.h>
+#include <linux/fs.h>
 
 #include "cse536_protocol.h"
 
@@ -23,7 +24,7 @@ struct comm_device {
 	char		name[20];
 	struct cdev	cdev;
 	unsigned int	devid;
-}*comm_devp[NUM_DEVICE];
+}*comm_devp;
 
 
 static dev_t comm_dev_number;	// Alloted device number //
@@ -40,7 +41,7 @@ int comm_open(struct inode *inode, struct file *file)
 {
 	struct comm_device *devtmp;
 
-	devtmp = container_of(inode->i_cdev, struct comm_device,cdev);
+	devtmp = container_of(inode->i_cdev, struct comm_device, cdev);
 
 	file->private_data = devtmp;
 	printk("%s: Device opening\n",devtmp->name);
@@ -69,9 +70,9 @@ ssize_t comm_read(struct file *file, char __user *buf , size_t count,
 		loff_t *ppos)
 {
 
-	int ret = 0;
+	size_t ret = 0;
 	char *data = NULL;
-	struct comm_device *tmpdev;
+	struct comm_device *tmpdev = NULL;
 
 	tmpdev = file->private_data;
 
@@ -83,7 +84,8 @@ ssize_t comm_read(struct file *file, char __user *buf , size_t count,
 
 	cse536_getmsg(data, &ret);
 	
-	if(copy_to_user( (void __user*)buf, (const void *)data, ret) != 0) {
+	if(copy_to_user( (void __user*)buf, (const void *)data, 
+						MAX_MSG_SIZE) != 0) {
 		pr_info("%s: Error copying data \n", tmpdev->name);
 		ret = -1;
 	}
@@ -100,20 +102,19 @@ ssize_t comm_read(struct file *file, char __user *buf , size_t count,
 ssize_t comm_write(struct file *file, const char *buf, size_t count,
 		loff_t *ppos)
 {
-	int ret = 0;
-	struct comm_dev *tmpdev = NULL;
+	struct comm_device *tmpdev = NULL;
 	char *tmp_data = NULL;
 
 	tmpdev = file->private_data;
 
-	tmp_data = kzalloc(sizeof(char)* MAX_MSG_SIZE, GFP_KERNEL);
+	tmp_data = kzalloc(sizeof(char)* (MAX_MSG_SIZE+1), GFP_KERNEL);
 	if(!tmp_data) {
-		pr_info("%s: Insufficient memory\n", tmpedv->name);
+		pr_info("%s: Insufficient memory\n", tmpdev->name);
 		return -ENOMEM;
 	}
 
 	if (copy_from_user((void *)tmp_data, 
-		(const void __user *)buf, count) != 0) {
+		(const void __user *)buf, MAX_MSG_SIZE+1) != 0) {
 		pr_info("%s: Error copying data from user buf\n", tmpdev->name);
 		kfree(tmp_data);
 		return -1;
@@ -122,12 +123,19 @@ ssize_t comm_write(struct file *file, const char *buf, size_t count,
 
 	if (tmp_data[0] == '1') {
 		// set the destination address
-		cse536_set_addr(tmp_data+1);
+		cse536_setaddr(tmp_data+1);
 	}
-	else {
+	else if(tmp_data[0] == '2'){
 		cse536_sendmsg(tmp_data+1, count);
 	}
-	pr_info("%s: data written = %s : %d \n",tmpdev->name, tmp_data, (unsigned int)count);
+	else {
+		pr_info("%s: Invalid argument \n",tmpdev->name);
+		kfree(tmp_data);
+		return -1;
+	}
+
+	pr_info("%s: data written = %s : %d \n",tmpdev->name, tmp_data,
+		(unsigned int)count);
 
 	if(tmp_data)
 		kfree(tmp_data);
@@ -150,48 +158,53 @@ static struct file_operations comm_fops = {
 static int __init comm_init(void)
 {
 	int ret;
-	int i;
 
 	/* Request dynamic allocation of a device major number */
-	if (alloc_chrdev_region(&comm_dev_number, 0, NUM_DEVICE, DEVICE_NAME) < 0) {
+	if (alloc_chrdev_region(&comm_dev_number, 0, NUM_DEVICE, 
+						DEVICE_NAME) < 0) {
 		printk(KERN_DEBUG "%s: Can't register device\n", DEVICE_NAME); 
-		return -1;
+		ret = -1;
+		goto end;
 	}
 
 	comm_dev_class = class_create(THIS_MODULE, DEVICE_NAME);
 	
-	for (i = 0; i < NUM_DEVICE; i++)
-	{
-		// Allocate memory for per-device structure
-		comm_devp[i] = kmalloc(sizeof(struct comm_device), GFP_KERNEL);
-		if ( !(comm_devp[i])) {
-			pr_info("%s : Insufficient memory !!\n",DEVICE_NAME);
-			unregister_chrdev_region((comm_dev_number), NUM_DEVICE);
-			return -ENOMEM;
-		}
-
-		sprintf(comm_devp[i]->name, "%s-%d", DEVICE_NAME, i);
-
-		/* Connect the file operations with the cdev */
-		cdev_init(&(comm_devp[i])->cdev, &comm_fops);
-		(comm_devp[i])->cdev.owner = THIS_MODULE;
-
-		/* Connect the major/minor number to the cdev */
-		ret = cdev_add(&comm_devp[i]->cdev, (comm_dev_number), NUM_DEVICE);
-		if (ret) {
-			printk("%s: Bad cdev\n", DEVICE_NAME);
-			kfree(comm_devp);
-			unregister_chrdev_region((comm_dev_number), 1);
-			return ret;
-		}
-
-		/* Send uevents to udev, so it'll create /dev nodes */
-		device_create(comm_dev_class, NULL, MKDEV(MAJOR(comm_dev_number), i),
-				NULL, "%s-%d",DEVICE_NAME,i);	
+	// Allocate memory for per-device structure
+	comm_devp = kmalloc(sizeof(struct comm_device), GFP_KERNEL);
+	if (!comm_devp) {
+		pr_info("%s : Insufficient memory !!\n",DEVICE_NAME);
+		ret = -ENOMEM;
+		goto unreg_device;
 	}
+
+	sprintf(comm_devp->name, "%s", DEVICE_NAME);
+	comm_devp->devid = 0;
+
+	/* Connect the file operations with the cdev */
+	cdev_init(&comm_devp->cdev, &comm_fops);
+	comm_devp->cdev.owner = THIS_MODULE;
+
+	/* Connect the major/minor number to the cdev */
+	ret = cdev_add(&comm_devp->cdev, (comm_dev_number), NUM_DEVICE);
+	if (ret) {
+		printk("%s: Bad cdev\n", DEVICE_NAME);
+		goto free_dev_mem;
+	}
+
+	/* Send uevents to udev, so it'll create /dev nodes */
+	device_create(comm_dev_class, NULL, MKDEV(MAJOR(comm_dev_number), 0),
+				NULL, "%s",DEVICE_NAME);	
 
 	pr_info("%s: Device Initialized\n", DEVICE_NAME);
 	return 0;
+
+free_dev_mem:
+	if(comm_devp)
+		kfree(comm_devp);
+unreg_device:
+        unregister_chrdev_region((comm_dev_number), 1);
+end:
+	return ret;
 }
 
 
@@ -201,13 +214,8 @@ static void __exit comm_exit(void)
 	device_destroy(comm_dev_class, MKDEV(MAJOR(comm_dev_number), 0));
 	cdev_del(&comm_devp->cdev);
 
-	del_cse536_proto();
-
-	if(!comm_devp->buf_size)
+	if(comm_devp)
 		kfree(comm_devp);
-	else {
-		// Free all the buffer nodes in list
-	}
 
 	/* Destroy driver_class */
 	class_destroy(comm_dev_class);
@@ -220,5 +228,5 @@ static void __exit comm_exit(void)
 module_init(comm_init);
 module_exit(comm_exit);
 MODULE_AUTHOR("Shashank Karkare");
-MODULE_DESCRIPTION("Communication over IP");
+MODULE_DESCRIPTION("Character device to send and recv msg over IP");
 MODULE_LICENSE("GPL");

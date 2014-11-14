@@ -114,11 +114,11 @@ int cse536_sendmsg(char *data, size_t len)
 EXPORT_SYMBOL(cse536_sendmsg);
 
 // Set destination address
-void cse536_set_addr(char *addr) 
+void cse536_setaddr(char *addr) 
 {
 	 cse536_daddr = in_aton(addr);
 }
-EXPORT_SYMBOL(cse536_set_addr);
+EXPORT_SYMBOL(cse536_setaddr);
 
 // Get the message from the list
 void cse536_getmsg(char *data, size_t *len)
