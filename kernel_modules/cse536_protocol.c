@@ -26,7 +26,17 @@ static struct node bufHead;
 __be32 cse536_daddr = 0;
 __be32 cse536_saddr = 0;
 
+// Check for the formating of the destination address
+static int cse536_isValidAddr(char *addr)
+{
+	int p1,p2,p3,p4;
 
+	sscanf(addr, "%d.%d.%d.%d", &p1, &p2, &p3, &p4);
+	if (p1 < 256 && p2 < 256 && p3 < 256 && p4 < 256)
+		return 1;
+	else
+		return -1;
+}
 
 // Receive function for cse536 protocol
 static int cse536_recv(struct sk_buff *skb)
@@ -114,9 +124,16 @@ int cse536_sendmsg(char *data, size_t len)
 EXPORT_SYMBOL(cse536_sendmsg);
 
 // Set destination address
-void cse536_setaddr(char *addr) 
+int cse536_setaddr(char *addr) 
 {
-	 cse536_daddr = in_aton(addr);
+	int ret;
+
+	ret = cse536_isValidAddr(addr);
+	if (ret == -1)
+		return -1;
+
+	cse536_daddr = in_aton(addr);
+	return 0;
 }
 EXPORT_SYMBOL(cse536_setaddr);
 

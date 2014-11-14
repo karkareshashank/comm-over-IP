@@ -15,7 +15,7 @@
 #include "cse536_protocol.h"
 
 #define DEVICE_NAME	"cse536"
-#define MAX_MSG_SIZE	256
+#define MAX_MSG_SIZE	257
 #define NUM_DEVICE	1
 
 
@@ -29,10 +29,6 @@ struct comm_device {
 
 static dev_t comm_dev_number;	// Alloted device number //
 struct class *comm_dev_class; 	// Tie with device model //
-
-///////////////////////////////////////////////////////////////////
-// 	Device part
-///////////////////////////////////////////////////////////////////
 
 /*
  * Open comm device
@@ -107,7 +103,7 @@ ssize_t comm_write(struct file *file, const char *buf, size_t count,
 
 	tmpdev = file->private_data;
 
-	tmp_data = kzalloc(sizeof(char)* (MAX_MSG_SIZE+1), GFP_KERNEL);
+	tmp_data = kzalloc(sizeof(char)* MAX_MSG_SIZE, GFP_KERNEL);
 	if(!tmp_data) {
 		pr_info("%s: Insufficient memory\n", tmpdev->name);
 		return -ENOMEM;
@@ -123,10 +119,14 @@ ssize_t comm_write(struct file *file, const char *buf, size_t count,
 
 	if (tmp_data[0] == '1') {
 		// set the destination address
-		cse536_setaddr(tmp_data+1);
+		if (cse536_setaddr(tmp_data+1) == -1){
+			kfree(tmp_data);
+			pr_info("%s: Invalid address format\n",tmpdev->name);
+			return -1;
+		}
 	}
 	else if(tmp_data[0] == '2'){
-		cse536_sendmsg(tmp_data+1, count);
+		cse536_sendmsg(tmp_data+1, count-1);
 	}
 	else {
 		pr_info("%s: Invalid argument \n",tmpdev->name);

@@ -16,7 +16,7 @@ int del_my_proto(void);
 
 int cse536_sendmsg(char *data, size_t len);
 void cse536_getmsg(char *data, size_t *len);
-void cse536_setaddr(char *data);
+int cse536_setaddr(char *addr);
 
 
 
