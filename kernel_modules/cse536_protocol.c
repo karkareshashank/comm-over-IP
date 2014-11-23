@@ -17,11 +17,16 @@
 #include <linux/inetdevice.h>
 #include <linux/netdevice.h>
 #include <linux/inet.h>
+#include <linux/waitqueue.h>
+#include <linux/wait.h>
 
 #include "cse536_protocol.h"
 
 static unsigned int ACK = 0;
 static struct node bufHead;
+
+// Initialize the wait queue
+DECLARE_WAIT_QUEUE_HEAD(cse536_wqueue);
 
 // destination and local address variables
 __be32 cse536_daddr = 0;
@@ -67,8 +72,8 @@ static int cse536_recv(struct sk_buff *skb)
 	}
 	else {				// If the received packet is ACK 
 		pr_info("%s: ACK received\n", __FILE__);
-		// cancel the tasklet
-		// Release the semaphore
+		ACK = 1;
+		wake_up(&cse536_wqueue);
 	}
 
         return 0;
@@ -143,15 +148,15 @@ int cse536_sendmsg(char *data, size_t len)
 {
 	unsigned int attepmt = 0;
 	int flag = 0;
+	int ret;
 	
 	if ( ((struct tansaction_struct*)data)->recID == 1) {
 
 		ACK = 0;
 		while( attempt != RETRY_ATTEMPTS) {
 			__cse536_sendmsg(data, len);
-			// Schedule delayed tasket
-			// grab the semaphore
-			if (ACK) {
+			ret = wait_event_timeout(&cse536_wqueue, ACK == 1U, WAIT_TIME_SEC * HZ);
+			if (ret) {
 				flag = 1;
 				break;
 			}

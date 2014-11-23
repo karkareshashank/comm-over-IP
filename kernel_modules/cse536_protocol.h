@@ -4,6 +4,7 @@
 #define IPPROTO_CSE536	234
 #define MAX_MSG_SIZE	257
 #define RETRY_ATTEMPTS	2
+#define WAIT_TIME_SEC	5
 
 /* Structure for buffer linklist */
 struct node {
