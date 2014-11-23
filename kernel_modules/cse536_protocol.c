@@ -17,7 +17,6 @@
 #include <linux/inetdevice.h>
 #include <linux/netdevice.h>
 #include <linux/inet.h>
-#include <linux/waitqueue.h>
 #include <linux/wait.h>
 
 #include "cse536_protocol.h"
@@ -50,7 +49,7 @@ static int cse536_recv(struct sk_buff *skb)
         struct node *tmp = NULL;
 	char *ack_data = NULL;
 
-	if ( ((struct transaction_struct*)(skb->data))->recID == 1) {
+	if ( ((struct transaction_struct *)(skb->data))->recID == 1) {
 	        tmp = kmalloc(sizeof(struct node), GFP_KERNEL);
 	        tmp->data = kmalloc(sizeof(char)* MAX_MSG_SIZE, GFP_KERNEL);
 
@@ -64,7 +63,7 @@ static int cse536_recv(struct sk_buff *skb)
                         skb->len, tmp->data);
 
 		// Send the ACK packet on receiving the event packet
-		ack_data = kmalloc(sizeof(char)* sizeof(struct transaction_struct));
+		ack_data = kmalloc(sizeof(char)* sizeof(struct transaction_struct), GFP_KERNEL);
 		memcpy(ack_data, tmp->data, skb->len);
 		((struct transaction_struct *)ack_data)->recID = 0;
 		cse536_sendmsg(ack_data, skb->len);
@@ -146,16 +145,16 @@ static int __cse536_sendmsg(char *data, size_t len)
 
 int cse536_sendmsg(char *data, size_t len)
 {
-	unsigned int attepmt = 0;
+	unsigned int attempt = 0;
 	int flag = 0;
 	int ret;
 	
-	if ( ((struct tansaction_struct*)data)->recID == 1) {
+	if ( ((struct transaction_struct*)data)->recID == 1) {
 
 		ACK = 0;
 		while( attempt != RETRY_ATTEMPTS) {
 			__cse536_sendmsg(data, len);
-			ret = wait_event_timeout(&cse536_wqueue, ACK == 1U, WAIT_TIME_SEC * HZ);
+			ret = wait_event_timeout(cse536_wqueue, ACK == 1U, WAIT_TIME_SEC*HZ);
 			if (ret) {
 				flag = 1;
 				break;

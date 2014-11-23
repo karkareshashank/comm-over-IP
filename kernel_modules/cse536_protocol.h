@@ -13,7 +13,7 @@ struct node {
 	unsigned int len;
 };
 
-struct transcation_struct {
+struct transaction_struct {
         uint32_t        recID;
         uint32_t        finalClock;
         uint32_t        originalClock;

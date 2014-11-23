@@ -27,16 +27,6 @@ struct comm_device {
 }*comm_devp;
 
 
-struct transcation_struct {
-	uint32_t	recID;
-	uint32_t	finalClock;
-	uint32_t	originalClock;
-	uint32_t	sourceAddr;
-	uint32_t	destAddr;
-	char		msg[236];
-};
-
-
 static dev_t comm_dev_number;	// Alloted device number //
 struct class *comm_dev_class; 	// Tie with device model //
 
