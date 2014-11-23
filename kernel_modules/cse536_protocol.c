@@ -26,6 +26,8 @@
 static unsigned int ACK = 0;
 static struct node bufHead;
 
+unsigned int localClock = 0;
+
 // Initialize the wait queue
 DECLARE_WAIT_QUEUE_HEAD(cse536_wqueue);
 
@@ -38,6 +40,7 @@ static int cse536_recv(struct sk_buff *skb)
 {
         struct node *tmp = NULL;
 	char *ack_data = NULL;
+	unsigned int tmpClock1, tmpClock2;
 
 	if ( ((struct transaction_struct *)(skb->data))->recID == 1) {
 	        tmp = kmalloc(sizeof(struct node), GFP_KERNEL);
@@ -45,6 +48,14 @@ static int cse536_recv(struct sk_buff *skb)
 
 	        memset(tmp->data, 0, sizeof(struct transaction_struct));
         	memcpy(tmp->data, skb->data, skb->len);
+
+		tmpClock1 = localClock;
+		if (tmp->data->finalClock >= localClock) 
+			localClock = tmp->data->finalClock + 1;
+		else
+			localClock++;
+		tmpClock2 = localClock;
+		
 
         	list_add_tail( &(tmp->list), &(bufHead.list));
 
@@ -56,6 +67,11 @@ static int cse536_recv(struct sk_buff *skb)
 		((struct transaction_struct *)ack_data)->recID = 0;
 		cse536_sendmsg(ack_data, skb->len);
 		kfree(ack_data);
+
+		// Append the original and final clock in the data
+		tmp->data->originalClock = tmpClock1;
+		tmp->data->finalClock = tmpClock2;
+
 	}
 	else {				// If the received packet is ACK 
 		pr_info("%s: ACK received\n", NAME);
@@ -134,13 +150,20 @@ static int __cse536_sendmsg(char *data, size_t len)
 int cse536_sendmsg(char *data, size_t len)
 {
 	unsigned int attempt = 0;
+	struct transaction_struct *tmp = (struct transaction_struct *)data;
 	int flag = 0;
 	int ret;
+
 	
 	if ( ((struct transaction_struct*)data)->recID == 1) {
+
+		tmp->originalClock = localClock;
+		localClock++;
+		tmp->finalClock    = localClock;				// Incremented value
 		cse536_daddr = ((struct transaction_struct *)data)->destAddr;
 		((struct transaction_struct *)data)->sourceAddr = cse536_saddr;
 		ACK = 0;
+
 		while( attempt != RETRY_ATTEMPTS) {
 			__cse536_sendmsg(data, len);
 			ret = wait_event_timeout(cse536_wqueue, ACK == 1U, WAIT_TIME_SEC*HZ);

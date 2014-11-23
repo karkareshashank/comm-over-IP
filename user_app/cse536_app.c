@@ -8,10 +8,16 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <arpa/inet.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <netdb.h>
 
 #define DEVICE_NAME	"/dev/cse536"
 #define MAX_MSG_SIZE	236
 #define ADDRESS_LEN	17
+#define SERVER_PORT 	23456 
+#define MAX_PENDING 	5
+#define MAX_LINE 	256
 
 // Every message should be in this format
 struct transaction_struct {
@@ -22,54 +28,6 @@ struct transaction_struct {
         uint32_t        destAddr;
         char            msg[MAX_MSG_SIZE];
 };
-
-/*
-// Sets the destination address in teh character device
-int  set_daddr(int fd, char *addr)
-{
-	int ret = 0;
-	char *data = (char *)malloc(sizeof(struct transaction_struct)  + 1);
-
-	data[0] = '1';
-	strcpy(data+1, addr);
-
-	ret = write(fd, (void *)data, strlen(data));
-	
-	if(data)
-		free(data);
-
-	return ret > 0 ? 1 : -1;
-}
-
-
-// Sends the message to  the character device
-int send_msg(int fd, char *msg)
-{
-	int ret = 0;
-	char *data = (char *)malloc(sizeof(struct transaction_struct) + 1);
-
-	data[0] = '2';
-	strcpy(data+1, msg);
-
-	ret = write(fd, (void *)data, strlen(data));
-
-	if(data)
-		free(data);
-
-	return ret > 0 ? 1 : -1;
-}
-*/
-
-// Gets the message from teh buffer in the device
-int recv_msg(int fd, char *msg)
-{
-	int ret = 0;
-
-	ret = read(fd, (char *)msg, sizeof(struct transaction_struct));
-	
-	return ret >= 0 ? 1 : -1;
-}
-
 
 // Prints choices for the user
 void print_choices()
@@ -88,12 +46,22 @@ void print_choices()
 int main(int argc, char **argv)
 {
 	int fd;
-	char fix;
 	int ret = 0;
+	int choice;
+	int len, n, s, new_s;
+	char fix;
 	char *data = NULL;
 	struct transaction_struct *buff = NULL;
-	int choice;
 	struct in_addr netaddr;
+	struct sockaddr_in client, server;
+	struct hostent *hp;
+
+
+	// initialize the network variables
+	bzero((char *)&server, sizeof(server));
+	server.sin_family = AF_INET;
+	server.sin_addr.s_addr = INADDR_ANY;
+	server.sin_port = htons(0);
 
 	// Allocate memory for input buffer
 	data = (char *)malloc(sizeof(char)* MAX_MSG_SIZE);
@@ -119,6 +87,33 @@ int main(int argc, char **argv)
 		goto free_buff;
 	}
 
+	// Connecting to the UDP server
+	s = socket(AF_INET, SOCK_DGRAM, 0);
+	if (s < 0)
+	{
+		perror("simplex-talk: UDP_socket error");
+		exit(1);
+	}
+
+	if ((bind(s, (struct sockaddr *)&server, sizeof(server))) < 0)
+	{
+		perror("simplex-talk: UDP_bind error");
+		exit(1);
+	}
+
+	hp = gethostbyname( "192.168.0.4" );
+	if( !hp )
+	{
+		fprintf(stderr, "Unknown host %s\n", "localhost");
+		exit(1);
+	}
+
+	bzero( (char *)&server, sizeof(server));
+	server.sin_family = AF_INET;
+	bcopy( hp->h_addr, (char *)&server.sin_addr, hp->h_length );
+	server.sin_port = htons(SERVER_PORT); 
+
+
 
 	while(1) {
 
@@ -143,13 +138,15 @@ int main(int argc, char **argv)
 				fgets(data, MAX_MSG_SIZE, stdin);
 				data[strlen(data)-1] = '\0';
 				strncpy(buff->msg, data, MAX_MSG_SIZE);
-				printf("%s: Sending message = %s\n",__FILE__, data);
 				buff->recID = 1;
 				if (write(fd, (char *)buff, sizeof(struct transaction_struct)) == -1) {
 					printf("%s: Error sending the message\n",__FILE__);
-					ret = -1;
-					goto close_file;
 				}
+				printf("%s: Sent  %d -- %d -- %s\n", __FILE__, buff->originalClock, buff->finalClock, buff->msg);
+				//
+				// Send the evnet struct to the udp server
+				ret = sendto(s, (char *)buff, MAX_LINE, 0,(struct sockaddr *)&server, sizeof(server));
+				//
 				break;
 
 			case 3:
@@ -160,7 +157,11 @@ int main(int argc, char **argv)
 					ret = -1;
 					goto close_file;
 				}
-				printf("%s: Message received = %s\n",__FILE__, buff->msg);
+				printf("%s: Recv  %d -- %d -- %s\n",__FILE__, buff->originalClock, buff->finalClock, buff->msg);
+				// 
+				// Send this event to udp server
+				ret = sendto(s, (char *)buff, MAX_LINE, 0,(struct sockaddr *)&server, sizeof(server));
+				//
 				break;
 
 			case 4:

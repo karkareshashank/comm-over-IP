@@ -97,6 +97,7 @@ ssize_t comm_read(struct file *file, char __user *buf , size_t count,
 ssize_t comm_write(struct file *file, const char *buf, size_t count,
 		loff_t *ppos)
 {
+	int ret;
 	struct comm_device *tmpdev = NULL;
 	struct transaction_struct *tmp_data = NULL;
 
@@ -115,12 +116,18 @@ ssize_t comm_write(struct file *file, const char *buf, size_t count,
 		return -1;
 	}
 	
-	cse536_sendmsg((char *)tmp_data, sizeof(struct transaction_struct));
+	ret = cse536_sendmsg((char *)tmp_data, sizeof(struct transaction_struct));
+
+	if (copy_to_user((void * __user)buf, (void *)tmp_data, sizeof(struct transaction_struct)) != 0) {
+		pr_info("%s: Error copying data to user buf\n", tmpdev->name);
+		kfree(tmp_data);
+		return -1;
+	}
 	
 	if(tmp_data)
 		kfree(tmp_data);
 
-	return count;
+	return ret == -1 ? -1 : count;
 }
 
 
