@@ -65,7 +65,7 @@ int recv_msg(int fd, char *msg)
 {
 	int ret = 0;
 
-	ret = read(fd, (void *)msg, sizeof(struct transaction_struct));
+	ret = read(fd, (char *)msg, sizeof(struct transaction_struct));
 	
 	return ret >= 0 ? 1 : -1;
 }
@@ -141,8 +141,10 @@ int main(int argc, char **argv)
 				// Send the data
 				printf("Enter the message: ");
 				fgets(data, MAX_MSG_SIZE, stdin);
+				data[strlen(data)-1] = '\0';
 				strncpy(buff->msg, data, MAX_MSG_SIZE);
 				printf("%s: Sending message = %s\n",__FILE__, data);
+				buff->recID = 1;
 				if (write(fd, (char *)buff, sizeof(struct transaction_struct)) == -1) {
 					printf("%s: Error sending the message\n",__FILE__);
 					ret = -1;
@@ -152,8 +154,8 @@ int main(int argc, char **argv)
 
 			case 3:
 				// Read the data
-				memset(data, 0, MAX_MSG_SIZE);
-				if (recv_msg(fd, (char *)buff) == -1) {
+				memset(buff, 0, sizeof(struct transaction_struct));
+				if ( read(fd, (char *)buff, sizeof(struct transaction_struct)) == -1) {
 					printf("%s: Error receiving message\n",__FILE__);
 					ret = -1;
 					goto close_file;

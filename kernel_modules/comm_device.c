@@ -15,7 +15,6 @@
 #include "cse536_protocol.h"
 
 #define DEVICE_NAME	"cse536"
-#define MAX_MSG_SIZE	257
 #define NUM_DEVICE	1
 
 
@@ -72,7 +71,7 @@ ssize_t comm_read(struct file *file, char __user *buf , size_t count,
 
 	tmpdev = file->private_data;
 
-	data = kzalloc(sizeof(char)*MAX_MSG_SIZE, GFP_KERNEL);
+	data = kzalloc(sizeof(struct transaction_struct), GFP_KERNEL);
 	if (!data) {
 		pr_info("%s: Insufficient memory\n", tmpdev->name);
 		return -ENOMEM;
@@ -81,7 +80,7 @@ ssize_t comm_read(struct file *file, char __user *buf , size_t count,
 	cse536_getmsg(data, &ret);
 	
 	if(copy_to_user( (void __user*)buf, (const void *)data, 
-						MAX_MSG_SIZE) != 0) {
+		sizeof(struct transaction_struct)) != 0) {
 		pr_info("%s: Error copying data \n", tmpdev->name);
 		ret = -1;
 	}
@@ -116,11 +115,8 @@ ssize_t comm_write(struct file *file, const char *buf, size_t count,
 		return -1;
 	}
 	
-	cse536_sendmsg(tmp_data, sizeof(struct transaction_struct));
+	cse536_sendmsg((char *)tmp_data, sizeof(struct transaction_struct));
 	
-	pr_info("%s: data written = %s : %d \n",tmpdev->name, tmp_data->msg,
-		(unsigned int)count);
-
 	if(tmp_data)
 		kfree(tmp_data);
 

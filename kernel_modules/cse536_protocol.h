@@ -21,12 +21,8 @@ struct node {
         struct transaction_struct *data;
 };
 
-int add_my_proto(void);
-int del_my_proto(void);
-
 int cse536_sendmsg(char *data, size_t len);
 void cse536_getmsg(char *data, size_t *len);
-int cse536_setaddr(char *addr);
 
 
 

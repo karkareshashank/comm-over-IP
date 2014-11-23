@@ -21,6 +21,8 @@
 
 #include "cse536_protocol.h"
 
+#define NAME	"cse536_protocol"
+
 static unsigned int ACK = 0;
 static struct node bufHead;
 
@@ -30,18 +32,6 @@ DECLARE_WAIT_QUEUE_HEAD(cse536_wqueue);
 // destination and local address variables
 __be32 cse536_daddr = 0;
 __be32 cse536_saddr = 0;
-
-// Check for the formating of the destination address
-static int cse536_isValidAddr(char *addr)
-{
-	int p1,p2,p3,p4;
-
-	sscanf(addr, "%d.%d.%d.%d", &p1, &p2, &p3, &p4);
-	if (p1 < 256 && p2 < 256 && p3 < 256 && p4 < 256)
-		return 1;
-	else
-		return -1;
-}
 
 // Receive function for cse536 protocol
 static int cse536_recv(struct sk_buff *skb)
@@ -58,8 +48,7 @@ static int cse536_recv(struct sk_buff *skb)
 
         	list_add_tail( &(tmp->list), &(bufHead.list));
 
-	        pr_info("%s: Receviced %d bytes: %s \n", __FILE__,
-                        skb->len, tmp->data->msg);
+	        pr_info("%s: Receviced %d bytes: %s \n", NAME, skb->len, tmp->data->msg);
 
 		// Send the ACK packet on receiving the event packet
 		ack_data = kmalloc(sizeof(char)* sizeof(struct transaction_struct), GFP_KERNEL);
@@ -69,7 +58,7 @@ static int cse536_recv(struct sk_buff *skb)
 		kfree(ack_data);
 	}
 	else {				// If the received packet is ACK 
-		pr_info("%s: ACK received\n", __FILE__);
+		pr_info("%s: ACK received\n", NAME);
 		ACK = 1;
 		wake_up(&cse536_wqueue);
 	}
@@ -80,7 +69,7 @@ static int cse536_recv(struct sk_buff *skb)
 // Error handling function for cse536 protocol
 static void cse536_error(struct sk_buff *skb, u32 info)
 {
-        pr_info("%s: Error in packet \n", __FILE__);
+        pr_info("%s: Error in packet \n", NAME);
 }
 
 
@@ -150,44 +139,32 @@ int cse536_sendmsg(char *data, size_t len)
 	
 	if ( ((struct transaction_struct*)data)->recID == 1) {
 		cse536_daddr = ((struct transaction_struct *)data)->destAddr;
-		cse536_saddr = ((struct transaction_struct *)data)->sourceAddr;
 		ACK = 0;
 		while( attempt != RETRY_ATTEMPTS) {
 			__cse536_sendmsg(data, len);
 			ret = wait_event_timeout(cse536_wqueue, ACK == 1U, WAIT_TIME_SEC*HZ);
 			if (ret) {
 				flag = 1;
+				pr_info("%s: Message sent : %s\n", NAME, ((struct transaction_struct *)data)->msg);
 				break;
 			}
 			attempt++;
 		}
 
-		if (!flag)
+		if (!flag) {
+			pr_info("%s: Message failed : %s\n", NAME, ((struct transaction_struct *)data)->msg);
 			return -1;
+		}
 	}
 	else {
-		cse536_saddr = ((struct transaction_struct *)data)->destAddr;
                 cse536_daddr = ((struct transaction_struct *)data)->sourceAddr;
 		__cse536_sendmsg(data, len);
+		pr_info("%s: ACK sent\n", NAME);
 	}
 	
 	return 0;
 }
 EXPORT_SYMBOL(cse536_sendmsg);
-
-// Set destination address
-int cse536_setaddr(char *addr) 
-{
-	int ret;
-
-	ret = cse536_isValidAddr(addr);
-	if (ret == -1)
-		return -1;
-
-	cse536_daddr = in_aton(addr);
-	return 0;
-}
-EXPORT_SYMBOL(cse536_setaddr);
 
 // Get the message from the list
 void cse536_getmsg(char *data, size_t *len)
@@ -204,8 +181,8 @@ void cse536_getmsg(char *data, size_t *len)
         entry = list_entry(tmp, struct node, list);
         list_del(tmp);
 
-	memcpy(data, entry->data, entry->len);
-	*len = entry->len;
+	memcpy(data, entry->data, sizeof(struct transaction_struct));
+	*len = sizeof(struct transaction_struct);
        
 	if(entry->data)
 		kfree(entry->data);
