@@ -139,6 +139,7 @@ int cse536_sendmsg(char *data, size_t len)
 	
 	if ( ((struct transaction_struct*)data)->recID == 1) {
 		cse536_daddr = ((struct transaction_struct *)data)->destAddr;
+		((struct transaction_struct *)data)->sourceAddr = cse536_saddr;
 		ACK = 0;
 		while( attempt != RETRY_ATTEMPTS) {
 			__cse536_sendmsg(data, len);
