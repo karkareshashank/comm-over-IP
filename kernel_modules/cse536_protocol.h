@@ -2,13 +2,23 @@
 #define __CSE536_PROTOCOL_H__
 
 #define IPPROTO_CSE536	234
-#define MAX_MSG_SIZE	256
+#define MAX_MSG_SIZE	257
+#define RETRY_ATTEMPTS	2
 
 /* Structure for buffer linklist */
 struct node {
         struct list_head list;
         char    *data;
 	unsigned int len;
+};
+
+struct transcation_struct {
+        uint32_t        recID;
+        uint32_t        finalClock;
+        uint32_t        originalClock;
+        uint32_t        sourceAddr;
+        uint32_t        destAddr;
+        char            msg[236];
 };
 
 int add_my_proto(void);

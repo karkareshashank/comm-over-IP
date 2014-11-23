@@ -20,6 +20,7 @@
 
 #include "cse536_protocol.h"
 
+static unsigned int ACK = 0;
 static struct node bufHead;
 
 // destination and local address variables
@@ -42,18 +43,33 @@ static int cse536_isValidAddr(char *addr)
 static int cse536_recv(struct sk_buff *skb)
 {
         struct node *tmp = NULL;
+	char *ack_data = NULL;
 
-        tmp = kmalloc(sizeof(struct node), GFP_KERNEL);
-        tmp->data = kmalloc(sizeof(char)* MAX_MSG_SIZE, GFP_KERNEL);
+	if ( ((struct transaction_struct*)(skb->data))->recID == 1) {
+	        tmp = kmalloc(sizeof(struct node), GFP_KERNEL);
+	        tmp->data = kmalloc(sizeof(char)* MAX_MSG_SIZE, GFP_KERNEL);
 
-        memset(tmp->data, 0, MAX_MSG_SIZE);
-        memcpy(tmp->data, skb->data, skb->len);
-	tmp->len = skb->len;
+	        memset(tmp->data, 0, MAX_MSG_SIZE);
+        	memcpy(tmp->data, skb->data, skb->len);
+		tmp->len = skb->len;
 
-        list_add_tail( &(tmp->list), &(bufHead.list));
+        	list_add_tail( &(tmp->list), &(bufHead.list));
 
-        pr_info("%s: Receviced %d bytes: %s \n", __FILE__,
+	        pr_info("%s: Receviced %d bytes: %s \n", __FILE__,
                         skb->len, tmp->data);
+
+		// Send the ACK packet on receiving the event packet
+		ack_data = kmalloc(sizeof(char)* sizeof(struct transaction_struct));
+		memcpy(ack_data, tmp->data, skb->len);
+		((struct transaction_struct *)ack_data)->recID = 0;
+		cse536_sendmsg(ack_data, skb->len);
+		kfree(ack_data);
+	}
+	else {				// If the received packet is ACK 
+		pr_info("%s: ACK received\n", __FILE__);
+		// cancel the tasklet
+		// Release the semaphore
+	}
 
         return 0;
 }
@@ -86,9 +102,9 @@ static int del_cse536_proto(void)
 }
 
 
-int cse536_sendmsg(char *data, size_t len)
+static int __cse536_sendmsg(char *data, size_t len)
 {
-        struct sk_buff  *skb;
+	struct sk_buff  *skb;
         struct iphdr    *iph;
         struct rtable   *rt;
         struct net      *net    = &init_net;
@@ -120,6 +136,36 @@ int cse536_sendmsg(char *data, size_t len)
         skb_dst_set(skb, &rt->dst);
 
         return ip_local_out(skb);
+}
+
+
+int cse536_sendmsg(char *data, size_t len)
+{
+	unsigned int attepmt = 0;
+	int flag = 0;
+	
+	if ( ((struct tansaction_struct*)data)->recID == 1) {
+
+		ACK = 0;
+		while( attempt != RETRY_ATTEMPTS) {
+			__cse536_sendmsg(data, len);
+			// Schedule delayed tasket
+			// grab the semaphore
+			if (ACK) {
+				flag = 1;
+				break;
+			}
+			attempt++;
+		}
+
+		if (!flag)
+			return -1;
+	}
+	else {
+		__cse536_sendmsg(data, len);
+	}
+	
+	return 0;
 }
 EXPORT_SYMBOL(cse536_sendmsg);
 
