@@ -11,7 +11,7 @@
 
 #define DEVICE_NAME	"/dev/cse536"
 #define MAX_MSG_SIZE	236
-#define ADDRESS_LEN	16
+#define ADDRESS_LEN	17
 
 // Every message should be in this format
 struct transaction_struct {
@@ -23,7 +23,7 @@ struct transaction_struct {
         char            msg[MAX_MSG_SIZE];
 };
 
-
+/*
 // Sets the destination address in teh character device
 int  set_daddr(int fd, char *addr)
 {
@@ -58,7 +58,7 @@ int send_msg(int fd, char *msg)
 
 	return ret > 0 ? 1 : -1;
 }
-
+*/
 
 // Gets the message from teh buffer in the device
 int recv_msg(int fd, char *msg)
@@ -128,7 +128,7 @@ int main(int argc, char **argv)
 
 		switch(choice) {
 
-			case 2:
+			case 1:
 				// Set the address
 				printf("Enter the address: ");
 				fgets(data, ADDRESS_LEN, stdin);
@@ -137,13 +137,13 @@ int main(int argc, char **argv)
 					continue;
 				}
  				buff->destAddr = netaddr.s_addr;
-					
+			case 2:		
 				// Send the data
 				printf("Enter the message: ");
 				fgets(data, MAX_MSG_SIZE, stdin);
 				strncpy(buff->msg, data, MAX_MSG_SIZE);
 				printf("%s: Sending message = %s\n",__FILE__, data);
-				if (send_msg(fd, (char *)buff) == -1) {
+				if (write(fd, (char *)buff, sizeof(struct transaction_struct)) == -1) {
 					printf("%s: Error sending the message\n",__FILE__);
 					ret = -1;
 					goto close_file;

@@ -6,13 +6,6 @@
 #define RETRY_ATTEMPTS	2
 #define WAIT_TIME_SEC	5
 
-/* Structure for buffer linklist */
-struct node {
-        struct list_head list;
-        char    *data;
-	unsigned int len;
-};
-
 struct transaction_struct {
         uint32_t        recID;
         uint32_t        finalClock;
@@ -20,6 +13,12 @@ struct transaction_struct {
         uint32_t        sourceAddr;
         uint32_t        destAddr;
         char            msg[236];
+};
+
+/* Structure for buffer linklist */
+struct node {
+        struct list_head list;
+        struct transaction_struct *data;
 };
 
 int add_my_proto(void);

@@ -51,16 +51,15 @@ static int cse536_recv(struct sk_buff *skb)
 
 	if ( ((struct transaction_struct *)(skb->data))->recID == 1) {
 	        tmp = kmalloc(sizeof(struct node), GFP_KERNEL);
-	        tmp->data = kmalloc(sizeof(char)* MAX_MSG_SIZE, GFP_KERNEL);
+	        tmp->data = kmalloc(sizeof(struct transaction_struct), GFP_KERNEL);
 
-	        memset(tmp->data, 0, MAX_MSG_SIZE);
+	        memset(tmp->data, 0, sizeof(struct transaction_struct));
         	memcpy(tmp->data, skb->data, skb->len);
-		tmp->len = skb->len;
 
         	list_add_tail( &(tmp->list), &(bufHead.list));
 
 	        pr_info("%s: Receviced %d bytes: %s \n", __FILE__,
-                        skb->len, tmp->data);
+                        skb->len, tmp->data->msg);
 
 		// Send the ACK packet on receiving the event packet
 		ack_data = kmalloc(sizeof(char)* sizeof(struct transaction_struct), GFP_KERNEL);
