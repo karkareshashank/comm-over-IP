@@ -15,7 +15,6 @@
 #include "cse536_protocol.h"
 
 #define DEVICE_NAME	"cse536"
-#define MAX_MSG_SIZE	257
 #define NUM_DEVICE	1
 
 
