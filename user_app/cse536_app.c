@@ -93,6 +93,7 @@ int main(int argc, char **argv)
 	char *data = NULL;
 	struct transaction_struct *buff = NULL;
 	int choice;
+	struct in_addr netaddr;
 
 	// Allocate memory for input buffer
 	data = (char *)malloc(sizeof(char)* MAX_MSG_SIZE);
@@ -103,7 +104,7 @@ int main(int argc, char **argv)
 	}
 
 	// Allocate memeory for transaction buffer
-	buff = (struct transcation_struct *)malloc(sizeof(struct transaction_struct));
+	buff = (struct transaction_struct *)malloc(sizeof(struct transaction_struct));
 	if (!buff) {
 		printf("%s: Insufficient memory\n", __FILE__);
 		ret = -1;
@@ -127,19 +128,16 @@ int main(int argc, char **argv)
 
 		switch(choice) {
 
-			case 1:
+			case 2:
 				// Set the address
 				printf("Enter the address: ");
 				fgets(data, ADDRESS_LEN, stdin);
-				buff->destAddr = inet_aton(data);	
-				if (set_daddr(fd, (char *)buff) == -1) {
-					printf("%s: Error setting the address\n", __FILE__);
-					ret = -1;
-					goto close_file;
-				}	
-				printf("Address set to %s successfully\n", data);
-		
-			case 2:
+				if(!inet_aton(data,&netaddr)){
+					printf("%s: Invalid address\n", __FILE__);
+					continue;
+				}
+ 				buff->destAddr = netaddr.s_addr;
+					
 				// Send the data
 				printf("Enter the message: ");
 				fgets(data, MAX_MSG_SIZE, stdin);
