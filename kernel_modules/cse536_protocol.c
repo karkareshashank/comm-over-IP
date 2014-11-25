@@ -33,7 +33,6 @@ atomic_t localClock = ATOMIC_INIT(0);
 DECLARE_WAIT_QUEUE_HEAD(cse536_wqueue);
 
 // destination and local address variables
-__be32 cse536_daddr = 0;
 __be32 cse536_saddr = 0;
 
 // Receive function for cse536 protocol
@@ -46,10 +45,6 @@ static int cse536_recv(struct sk_buff *skb)
 	// If the receiving packet is ACK then we store it in the list
 	if ( ((struct transaction_struct *)(skb->data))->recID == 0) {
 
-		// Wake up the waiting process
-		ACK = 1;
-		wake_up(&cse536_wqueue);
-
 	        tmp = kmalloc(sizeof(struct node), GFP_KERNEL);
 	        tmp->data = kmalloc(sizeof(struct transaction_struct), GFP_KERNEL);
 
@@ -61,20 +56,22 @@ static int cse536_recv(struct sk_buff *skb)
 		up(&listSem);			// Release semaphore
 
 		pr_info("%s: ACK received\n", NAME);
+		ACK = 1;
+		wake_up(&cse536_wqueue);
 
 	} else {   // If the receiving packet is of event type
 		
 		// Send the ACK packet on receiving the event packet
 		ack_data = kmalloc(sizeof(char)* sizeof(struct transaction_struct), GFP_KERNEL);
 		memcpy(ack_data, skb->data, skb->len);
-		tmpClock = tmp->data->finalClock;	
+		tmpClock = ((struct transaction_struct*)ack_data)->finalClock;	
 
 		if (tmpClock >= atomic_read(&localClock))
 			atomic_set(&localClock, tmpClock + 1);
 		else
 			atomic_inc(&localClock);
 		
-	        pr_info("%s: Receviced %d bytes: %s \n", NAME, skb->len, tmp->data->msg);
+	        pr_info("%s: Receviced %d bytes: %s \n", NAME, skb->len, ((struct transaction_struct *)ack_data)->msg);
 
 		((struct transaction_struct *)ack_data)->recID = 0;
 		cse536_sendmsg(ack_data, skb->len);
@@ -112,7 +109,7 @@ static int del_cse536_proto(void)
 }
 
 
-static int __cse536_sendmsg(char *data, size_t len)
+static int __cse536_sendmsg(char *data, size_t len, __be32 saddr, __be32 daddr)
 {
 	struct sk_buff  *skb;
         struct iphdr    *iph;
@@ -135,14 +132,14 @@ static int __cse536_sendmsg(char *data, size_t len)
         iph->tos        = 0;
         iph->frag_off   = 0;
         iph->ttl        = 64;
-        iph->daddr      = cse536_daddr;
-        iph->saddr      = cse536_saddr;
+        iph->daddr      = daddr;
+        iph->saddr      = saddr;
         iph->protocol   = IPPROTO_CSE536;
         iph->id         = htons(1);
         iph->tot_len    = htons(skb->len);
 
         // get the route
-        rt = ip_route_output(net, cse536_daddr, cse536_saddr, 0, 0);
+        rt = ip_route_output(net, daddr, saddr, 0, 0);
         skb_dst_set(skb, &rt->dst);
 
         return ip_local_out(skb);
@@ -155,23 +152,23 @@ int cse536_sendmsg(char *data, size_t len)
 	struct transaction_struct *tmp = (struct transaction_struct *)data;
 	int flag = 0;
 	int ret;
+	__be32 saddr;
+	__be32 daddr;
 
 	
 	if ( ((struct transaction_struct*)data)->recID == 1) {
-		pr_info("Here in sendmsg \n");
-
 
 		tmp->originalClock = atomic_read(&localClock);
 		atomic_inc(&localClock);
 		tmp->finalClock    =  tmp->originalClock+1;			// Incremented value
 
-		pr_info("After updateing clock\n");
-		cse536_daddr = ((struct transaction_struct *)data)->destAddr;
+		daddr = ((struct transaction_struct *)data)->destAddr;
 		((struct transaction_struct *)data)->sourceAddr = cse536_saddr;
+		saddr = cse536_saddr;
 		ACK = 0;
 
 		while( attempt != RETRY_ATTEMPTS) {
-			__cse536_sendmsg(data, len);
+			__cse536_sendmsg(data, len, saddr, daddr);
 			ret = wait_event_timeout(cse536_wqueue, ACK == 1U, WAIT_TIME_SEC*HZ);
 			if (ret) {
 				flag = 1;
@@ -187,8 +184,9 @@ int cse536_sendmsg(char *data, size_t len)
 		}
 	}
 	else {
-                cse536_daddr = ((struct transaction_struct *)data)->sourceAddr;
-		__cse536_sendmsg(data, len);
+                daddr = ((struct transaction_struct *)data)->sourceAddr;
+		saddr = cse536_saddr;
+		__cse536_sendmsg(data, len, saddr, daddr);
 		pr_info("%s: ACK sent\n", NAME);
 	}
 	
@@ -241,7 +239,7 @@ static void get_local_address(void)
 static int __init cse536_init(void)
 {
 	INIT_LIST_HEAD(&bufHead.list);	
-	sema_init(&listSem, 0);
+	sema_init(&listSem, 1);
 	add_cse536_proto();
 	get_local_address();	
 

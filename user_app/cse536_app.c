@@ -34,7 +34,7 @@ void print_choices()
 {
 	printf("------------------------------\n");
 	printf("1 --- Set destination address \n");
-	printf("2 --- Send message	      \n");
+	printf("  --- and Send message	      \n");
 	printf("3 --- Read Message	      \n");
 	printf("4 --- Exit		      \n");
 	printf("------------------------------\n");
@@ -125,28 +125,30 @@ int main(int argc, char **argv)
 
 			case 1:
 				// Set the address
+				memset(data, 0, MAX_MSG_SIZE);
 				printf("Enter the address: ");
 				fgets(data, ADDRESS_LEN, stdin);
-				if(!inet_aton(data,&netaddr)){
+				data[strlen(data)-1] = '\0';
+				if(!inet_aton(data, &netaddr)){
 					printf("%s: Invalid address\n", __FILE__);
 					continue;
 				}
  				buff->destAddr = netaddr.s_addr;
-			case 2:		
+
 				// Send the data
+				memset(data, 0, MAX_MSG_SIZE);
 				printf("Enter the message: ");
 				fgets(data, MAX_MSG_SIZE, stdin);
 				data[strlen(data)-1] = '\0';
 				strncpy(buff->msg, data, MAX_MSG_SIZE);
 				buff->recID = 1;
+				buff->originalClock = buff->finalClock = 0;
 				if (write(fd, (char *)buff, sizeof(struct transaction_struct)) == -1) {
 					printf("%s: Error sending the message\n",__FILE__);
 				}
-				printf("%s: Sent  %d -- %d -- %s\n", __FILE__, buff->originalClock, buff->finalClock, buff->msg);
 				//
 				// Send the evnet struct to the udp server
 				ret = sendto(s, (char *)buff, MAX_LINE, 0,(struct sockaddr *)&server, sizeof(server));
-				//
 				break;
 
 			case 3:
@@ -157,11 +159,9 @@ int main(int argc, char **argv)
 					ret = -1;
 					goto close_file;
 				}
-				printf("%s: Recv  %d -- %d -- %s\n",__FILE__, buff->originalClock, buff->finalClock, buff->msg);
-				// 
+				 
 				// Send this event to udp server
 				ret = sendto(s, (char *)buff, MAX_LINE, 0,(struct sockaddr *)&server, sizeof(server));
-				//
 				break;
 
 			case 4:
