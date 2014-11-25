@@ -25,8 +25,9 @@
 
 static unsigned int ACK = 0;
 static struct node bufHead;
+static struct semaphore listSem;
 
-unsigned int localClock = 0;
+atomic_t localClock = ATOMIC_INIT(0);
 
 // Initialize the wait queue
 DECLARE_WAIT_QUEUE_HEAD(cse536_wqueue);
@@ -40,43 +41,44 @@ static int cse536_recv(struct sk_buff *skb)
 {
         struct node *tmp = NULL;
 	char *ack_data = NULL;
-	unsigned int tmpClock1, tmpClock2;
+	int   tmpClock;
 
-	if ( ((struct transaction_struct *)(skb->data))->recID == 1) {
+	// If the receiving packet is ACK then we store it in the list
+	if ( ((struct transaction_struct *)(skb->data))->recID == 0) {
+
+		// Wake up the waiting process
+		ACK = 1;
+		wake_up(&cse536_wqueue);
+
 	        tmp = kmalloc(sizeof(struct node), GFP_KERNEL);
 	        tmp->data = kmalloc(sizeof(struct transaction_struct), GFP_KERNEL);
 
 	        memset(tmp->data, 0, sizeof(struct transaction_struct));
         	memcpy(tmp->data, skb->data, skb->len);
 
-		tmpClock1 = localClock;
-		if (tmp->data->finalClock >= localClock) 
-			localClock = tmp->data->finalClock + 1;
-		else
-			localClock++;
-		tmpClock2 = localClock;
+		down(&listSem);   		// Acquire semaphore
+		list_add_tail( &(tmp->list), &(bufHead.list));
+		up(&listSem);			// Release semaphore
+
+		pr_info("%s: ACK received\n", NAME);
+
+	} else {   // If the receiving packet is of event type
 		
-
-        	list_add_tail( &(tmp->list), &(bufHead.list));
-
-	        pr_info("%s: Receviced %d bytes: %s \n", NAME, skb->len, tmp->data->msg);
-
 		// Send the ACK packet on receiving the event packet
 		ack_data = kmalloc(sizeof(char)* sizeof(struct transaction_struct), GFP_KERNEL);
-		memcpy(ack_data, tmp->data, skb->len);
+		memcpy(ack_data, skb->data, skb->len);
+		tmpClock = tmp->data->finalClock;	
+
+		if (tmpClock >= atomic_read(&localClock))
+			atomic_set(&localClock, tmpClock + 1);
+		else
+			atomic_inc(&localClock);
+		
+	        pr_info("%s: Receviced %d bytes: %s \n", NAME, skb->len, tmp->data->msg);
+
 		((struct transaction_struct *)ack_data)->recID = 0;
 		cse536_sendmsg(ack_data, skb->len);
 		kfree(ack_data);
-
-		// Append the original and final clock in the data
-		tmp->data->originalClock = tmpClock1;
-		tmp->data->finalClock = tmpClock2;
-
-	}
-	else {				// If the received packet is ACK 
-		pr_info("%s: ACK received\n", NAME);
-		ACK = 1;
-		wake_up(&cse536_wqueue);
 	}
 
         return 0;
@@ -156,10 +158,14 @@ int cse536_sendmsg(char *data, size_t len)
 
 	
 	if ( ((struct transaction_struct*)data)->recID == 1) {
+		pr_info("Here in sendmsg \n");
 
-		tmp->originalClock = localClock;
-		localClock++;
-		tmp->finalClock    = localClock;				// Incremented value
+
+		tmp->originalClock = atomic_read(&localClock);
+		atomic_inc(&localClock);
+		tmp->finalClock    =  tmp->originalClock+1;			// Incremented value
+
+		pr_info("After updateing clock\n");
 		cse536_daddr = ((struct transaction_struct *)data)->destAddr;
 		((struct transaction_struct *)data)->sourceAddr = cse536_saddr;
 		ACK = 0;
@@ -200,10 +206,12 @@ void cse536_getmsg(char *data, size_t *len)
 		*len = 0;
                 return;
 	}
-
+	
+	down(&listSem);		// Acquire semaphore
         tmp = bufHead.list.next;
         entry = list_entry(tmp, struct node, list);
         list_del(tmp);
+	up(&listSem);		// Release semaphore
 
 	memcpy(data, entry->data, sizeof(struct transaction_struct));
 	*len = sizeof(struct transaction_struct);
@@ -233,6 +241,7 @@ static void get_local_address(void)
 static int __init cse536_init(void)
 {
 	INIT_LIST_HEAD(&bufHead.list);	
+	sema_init(&listSem, 0);
 	add_cse536_proto();
 	get_local_address();	
 
