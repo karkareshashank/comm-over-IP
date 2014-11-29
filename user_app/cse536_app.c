@@ -62,6 +62,7 @@ int main(int argc, char **argv)
 	char *data = NULL;
 	struct transaction_struct *buff = NULL;
 	struct in_addr netaddr;
+	struct in_addr recvaddr;
 	struct sockaddr_in client, server;
 	struct hostent *hp;
 
@@ -169,7 +170,13 @@ int main(int argc, char **argv)
 				// Read the data
 				memset(buff, 0, sizeof(struct transaction_struct));
 				while (read(fd, (char *)buff, sizeof(struct transaction_struct)) > 0) {
-					ret = sendto(s, (char *)buff, MAX_LINE, 0,(struct sockaddr *)&server, sizeof(server));
+					if (buff->recID == 0) {
+						ret = sendto(s, (char *)buff, MAX_LINE, 0,(struct sockaddr *)&server, sizeof(server));
+					}
+					else {
+						recvaddr.s_addr = buff->sourceAddr;
+						printf("Msg Received from : %s  : %s \n", inet_ntoa(recvaddr), buff->msg);
+					}
 					memset(buff, 0, sizeof(struct transaction_struct));
 				}
 				break;

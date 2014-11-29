@@ -25,3 +25,23 @@ compile.sh -- This is a shell script used to compile, insert modules,
 	and execute the user app
 
 rem.sh -- This is the clean up shell script
+
+
+
+Compile, load module and execute the app
+========================================
+
+$ ./compile.sh
+
+This will compile, the modules and the user app.
+Then it will load the module in order and execute the app.
+
+
+
+Cleanup
+=======
+$ ./rem.sh
+
+This will remove the inserted module inorder.
+It will then make clean the modules and delete the app binary
+

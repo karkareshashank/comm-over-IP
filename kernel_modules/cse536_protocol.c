@@ -61,6 +61,17 @@ static int cse536_recv(struct sk_buff *skb)
 
 	} else {   // If the receiving packet is of event type
 		
+		// Store the event msg to read it later
+		tmp = kmalloc(sizeof(struct node), GFP_KERNEL);
+                tmp->data = kmalloc(sizeof(struct transaction_struct), GFP_KERNEL);
+
+                memset(tmp->data, 0, sizeof(struct transaction_struct));
+                memcpy(tmp->data, skb->data, skb->len);
+
+                down(&listSem);                 // Acquire semaphore
+                list_add_tail( &(tmp->list), &(bufHead.list));
+                up(&listSem);   
+
 		// Send the ACK packet on receiving the event packet
 		ack_data = kmalloc(sizeof(char)* sizeof(struct transaction_struct), GFP_KERNEL);
 		memcpy(ack_data, skb->data, skb->len);
