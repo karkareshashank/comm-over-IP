@@ -74,6 +74,7 @@ static int cse536_recv(struct sk_buff *skb)
 	        pr_info("%s: Receviced %d bytes: %s \n", NAME, skb->len, ((struct transaction_struct *)ack_data)->msg);
 
 		((struct transaction_struct *)ack_data)->recID = 0;
+		((struct transaction_struct *)ack_data)->finalClock = atomic_read(&localClock);
 		cse536_sendmsg(ack_data, skb->len);
 		kfree(ack_data);
 	}
@@ -158,9 +159,9 @@ int cse536_sendmsg(char *data, size_t len)
 	
 	if ( ((struct transaction_struct*)data)->recID == 1) {
 
-		tmp->originalClock = atomic_read(&localClock);
 		atomic_inc(&localClock);
-		tmp->finalClock    =  tmp->originalClock+1;			// Incremented value
+		tmp->originalClock = atomic_read(&localClock);
+		
 
 		daddr = ((struct transaction_struct *)data)->destAddr;
 		((struct transaction_struct *)data)->sourceAddr = cse536_saddr;
