@@ -1,5 +1,27 @@
 comm-over-IP
 =============
 
-Kernel modules to provide ability to send and receive the messages
-directly via IP.
+Provides event ordering in the distributed environment,
+by sending the events and the acknoledgement to the
+cse536monitor.exe. It displays the data.
+
+kernel_modules/comm_device.c -- This provides the character device
+	to which any application can communicate to send msg across
+	the network.
+
+kernel_modules/cse536_protocol.c -- This module add the cse536 protocol
+	to the networking stack of the linux. The messages are send,
+	and until ACK is received, the process waits for 5 sec before
+	making the another but last attempt.
+
+kernel_modules/cse536_protocol.h -- This function defines the 
+	linklist structure and also the transaction structure
+	needed to send the message.
+
+user_app/cse536_app.c -- This is the user app developed to 
+	send and receive the messages .
+
+compile.sh -- This is a shell script used to compile, insert modules,
+	and execute the user app
+
+rem.sh -- This is the clean up shell script
