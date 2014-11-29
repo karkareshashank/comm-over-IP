@@ -168,14 +168,10 @@ int main(int argc, char **argv)
 			case 3:
 				// Read the data
 				memset(buff, 0, sizeof(struct transaction_struct));
-				if ( read(fd, (char *)buff, sizeof(struct transaction_struct)) == -1) {
-					printf("%s: Error receiving message\n",__FILE__);
-					ret = -1;
-					goto close_file;
+				while (read(fd, (char *)buff, sizeof(struct transaction_struct)) > 0) {
+					ret = sendto(s, (char *)buff, MAX_LINE, 0,(struct sockaddr *)&server, sizeof(server));
+					memset(buff, 0, sizeof(struct transaction_struct));
 				}
-				 
-				// Send this event to udp server
-				ret = sendto(s, (char *)buff, MAX_LINE, 0,(struct sockaddr *)&server, sizeof(server));
 				break;
 
 			case 4:
