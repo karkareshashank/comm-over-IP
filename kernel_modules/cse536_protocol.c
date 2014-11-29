@@ -75,7 +75,7 @@ static int cse536_recv(struct sk_buff *skb)
 		// Send the ACK packet on receiving the event packet
 		ack_data = kmalloc(sizeof(char)* sizeof(struct transaction_struct), GFP_KERNEL);
 		memcpy(ack_data, skb->data, skb->len);
-		tmpClock = ((struct transaction_struct*)ack_data)->OriginalClock;	
+		tmpClock = ((struct transaction_struct*)ack_data)->originalClock;	
 
 		if (tmpClock >= atomic_read(&localClock))
 			atomic_set(&localClock, tmpClock + 1);
