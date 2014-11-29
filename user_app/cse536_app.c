@@ -19,6 +19,8 @@
 #define MAX_PENDING 	5
 #define MAX_LINE 	256
 
+static uint32_t   defaultDestAddr;
+
 // Every message should be in this format
 struct transaction_struct {
         uint32_t        recID;
@@ -34,13 +36,20 @@ void print_choices()
 {
 	printf("------------------------------\n");
 	printf("1 --- Set destination address \n");
-	printf("  --- and Send message	      \n");
+	printf("2 --- Send message	      \n");
 	printf("3 --- Read Message	      \n");
 	printf("4 --- Exit		      \n");
 	printf("------------------------------\n");
 	printf("Enter your choice: ");
 }
 
+
+void initTransaction(struct transaction_struct *buf)
+{
+	buf->recID = 1;
+	buf->destAddr = defaultDestAddr;
+	buf->finalClock = buf->originalClock = 0;
+}
 
 // Main code
 int main(int argc, char **argv)
@@ -55,6 +64,9 @@ int main(int argc, char **argv)
 	struct in_addr netaddr;
 	struct sockaddr_in client, server;
 	struct hostent *hp;
+
+	inet_aton("127.0.0.1", &netaddr);
+	defaultDestAddr = netaddr.s_addr;
 
 
 	// initialize the network variables
@@ -134,15 +146,17 @@ int main(int argc, char **argv)
 					continue;
 				}
  				buff->destAddr = netaddr.s_addr;
-
+				defaultDestAddr = buff->destAddr;
+			case 2:
 				// Send the data
+				initTransaction(buff);
+
 				memset(data, 0, MAX_MSG_SIZE);
 				printf("Enter the message: ");
 				fgets(data, MAX_MSG_SIZE, stdin);
 				data[strlen(data)-1] = '\0';
 				strncpy(buff->msg, data, MAX_MSG_SIZE);
-				buff->recID = 1;
-				buff->originalClock = buff->finalClock = 0;
+				
 				if (write(fd, (char *)buff, sizeof(struct transaction_struct)) == -1) {
 					printf("%s: Error sending the message\n",__FILE__);
 				}
