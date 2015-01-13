@@ -71,7 +71,7 @@ ssize_t comm_read(struct file *file, char __user *buf , size_t count,
 
 	tmpdev = file->private_data;
 
-	data = kzalloc(sizeof(char)*MAX_MSG_SIZE, GFP_KERNEL);
+	data = kzalloc(sizeof(struct transaction_struct), GFP_KERNEL);
 	if (!data) {
 		pr_info("%s: Insufficient memory\n", tmpdev->name);
 		return -ENOMEM;
@@ -80,7 +80,7 @@ ssize_t comm_read(struct file *file, char __user *buf , size_t count,
 	cse536_getmsg(data, &ret);
 	
 	if(copy_to_user( (void __user*)buf, (const void *)data, 
-						MAX_MSG_SIZE) != 0) {
+		sizeof(struct transaction_struct)) != 0) {
 		pr_info("%s: Error copying data \n", tmpdev->name);
 		ret = -1;
 	}
@@ -97,49 +97,37 @@ ssize_t comm_read(struct file *file, char __user *buf , size_t count,
 ssize_t comm_write(struct file *file, const char *buf, size_t count,
 		loff_t *ppos)
 {
+	int ret;
 	struct comm_device *tmpdev = NULL;
-	char *tmp_data = NULL;
+	struct transaction_struct *tmp_data = NULL;
 
 	tmpdev = file->private_data;
 
-	tmp_data = kzalloc(sizeof(char)* MAX_MSG_SIZE, GFP_KERNEL);
+	tmp_data = kzalloc(sizeof(struct transaction_struct), GFP_KERNEL);
 	if(!tmp_data) {
 		pr_info("%s: Insufficient memory\n", tmpdev->name);
 		return -ENOMEM;
 	}
 
 	if (copy_from_user((void *)tmp_data, 
-		(const void __user *)buf, MAX_MSG_SIZE+1) != 0) {
+		(const void __user *)buf, sizeof(struct transaction_struct)) != 0) {
 		pr_info("%s: Error copying data from user buf\n", tmpdev->name);
 		kfree(tmp_data);
 		return -1;
 	}
-	tmp_data[strlen(tmp_data)] = '\0';
+	
+	ret = cse536_sendmsg((char *)tmp_data, sizeof(struct transaction_struct));
 
-	if (tmp_data[0] == '1') {
-		// set the destination address
-		if (cse536_setaddr(tmp_data+1) == -1){
-			kfree(tmp_data);
-			pr_info("%s: Invalid address format\n",tmpdev->name);
-			return -1;
-		}
-	}
-	else if(tmp_data[0] == '2'){
-		cse536_sendmsg(tmp_data+1, count-1);
-	}
-	else {
-		pr_info("%s: Invalid argument \n",tmpdev->name);
+	if (copy_to_user((void * __user)buf, (void *)tmp_data, sizeof(struct transaction_struct)) != 0) {
+		pr_info("%s: Error copying data to user buf\n", tmpdev->name);
 		kfree(tmp_data);
 		return -1;
 	}
-
-	pr_info("%s: data written = %s : %d \n",tmpdev->name, tmp_data,
-		(unsigned int)count);
-
+	
 	if(tmp_data)
 		kfree(tmp_data);
 
-	return count;
+	return ret == -1 ? -1 : count;
 }
 
 
